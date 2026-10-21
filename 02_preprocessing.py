@@ -93,7 +93,18 @@ def flag_numeric_variable(values, idealvals, tolerance, direction):
 def process_numeric_variable(df, domain_name, var_name, spec):
     """Standardize units (if needed), flag, and score one numeric variable."""
     col = spec["column"]
-    raw = pd.to_numeric(df[col], errors="coerce")
+
+    # MBSAQIP stores HTN medication counts as:
+    # 0, 1, 2, or "3 or more".
+    # Treat "3 or more" as 3 so the severity calculation
+    # correctly reaches 100.
+    if col == "NBHTN_MEDS":
+        raw = pd.to_numeric(
+            df[col].replace({"3 or more": "3"}),
+            errors="coerce"
+        )
+    else:
+        raw = pd.to_numeric(df[col], errors="coerce")
 
     # --- 1. unit standardization ---
     # unit_kind ("height"/"weight") tells us which conversion applies; it's
@@ -145,6 +156,7 @@ def process_numeric_variable(df, domain_name, var_name, spec):
 def process_categorical_variable(df, domain_name, var_name, spec):
     """Flag and score one binary/ordinal (categorical) variable."""
     col = spec["column"]
+
     raw = df[col]
     category_scores = spec.get("category_scores")
     flag_eligible = var_name not in config.FLAG_INELIGIBLE_VARIABLES and category_scores is not None

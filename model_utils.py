@@ -87,17 +87,35 @@ def build_feature_matrix(df, imputation_medians=None):
             # ---------------------------------------------------------------
             if spec["var_type"] == "numeric" and contributes:
 
-                col = f"{var_name}__SEVERITY"
+                base_col = f"{var_name}__SEVERITY"
 
-                if col not in df.columns:
+                if base_col not in df.columns:
                     continue
 
-                series = df[col].copy()
+                # A variable may intentionally contribute to more than one
+                # clinical domain. Give those duplicate feature occurrences
+                # domain-specific names so pandas does not create duplicate
+                # column names in the model matrix.
+                duplicate_domains = [
+                    d_name
+                    for d_name, d_spec in config.VARIABLE_RATIONALE.items()
+                    if var_name in d_spec["variables"]
+                    and d_spec["variables"][var_name].get("column") is not None
+                ]
+
+                if len(duplicate_domains) > 1:
+                    col = f"{domain_name}_{base_col}"
+                else:
+                    col = base_col
+
+                series = df[base_col].copy()
 
                 if imputation_medians is not None and col in imputation_medians:
                     median_value = imputation_medians[col]
-                else:
+                elif series.notna().any():
                     median_value = series.median()
+                else:
+                    median_value = 0.0
 
                 used_imputation_medians[col] = median_value
 
@@ -130,17 +148,35 @@ def build_feature_matrix(df, imputation_medians=None):
             # ---------------------------------------------------------------
             elif spec["var_type"] in ("binary", "ordinal") and contributes:
 
-                col = f"{var_name}__SEVERITY"
+                base_col = f"{var_name}__SEVERITY"
 
-                if col not in df.columns:
+                if base_col not in df.columns:
                     continue
 
-                series = df[col].copy()
+                # A variable may intentionally contribute to more than one
+                # clinical domain. Give those duplicate feature occurrences
+                # domain-specific names so pandas does not create duplicate
+                # column names in the model matrix.
+                duplicate_domains = [
+                    d_name
+                    for d_name, d_spec in config.VARIABLE_RATIONALE.items()
+                    if var_name in d_spec["variables"]
+                    and d_spec["variables"][var_name].get("column") is not None
+                ]
+
+                if len(duplicate_domains) > 1:
+                    col = f"{domain_name}_{base_col}"
+                else:
+                    col = base_col
+
+                series = df[base_col].copy()
 
                 if imputation_medians is not None and col in imputation_medians:
                     median_value = imputation_medians[col]
-                else:
+                elif series.notna().any():
                     median_value = series.median()
+                else:
+                    median_value = 0.0
 
                 used_imputation_medians[col] = median_value
 

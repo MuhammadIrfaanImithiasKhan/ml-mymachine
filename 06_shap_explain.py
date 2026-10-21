@@ -637,26 +637,41 @@ def run_global_explanation(
         # -----------------------------------------------------------
         # VARIABLE-WISE IMPORTANCE TABLE
         # -----------------------------------------------------------
+        #
+        # Keep domain + variable together because a variable can
+        # intentionally contribute to more than one domain.
+        # Example:
+        #   Adiposity + MOBILITY_DEVICE
+        #   Behavioral + MOBILITY_DEVICE
+        #
+        # Grouping by variable name alone would collapse those two
+        # features into one row and lose the domain distinction.
 
-        var_grouped = group_shap_by(
-            sv_df,
-            pd.Series(feature_to_variable)
-        )
+        feature_domain_variable = {
+            feature: (
+                feature_to_domain.get(feature),
+                feature_to_variable.get(feature)
+            )
+            for feature in sv_df.columns
+        }
 
-        var_importance = (
-            var_grouped
-            .mean(axis=1)
-        )
+        grouped_frames = {}
 
-        for var_name, val in var_importance.items():
+        for feature, (domain, variable) in feature_domain_variable.items():
+            key = (domain, variable)
 
-            domain = next(
-                (
-                    d
-                    for f, d in feature_to_domain.items()
-                    if feature_to_variable.get(f) == var_name
-                ),
-                None
+            if key not in grouped_frames:
+                grouped_frames[key] = []
+
+            grouped_frames[key].append(feature)
+
+        for (domain, var_name), features in grouped_frames.items():
+
+            mean_abs_shap = (
+                sv_df[features]
+                .abs()
+                .mean()
+                .mean()
             )
 
             importance_rows.append(
@@ -664,7 +679,7 @@ def run_global_explanation(
                     "target": target_name,
                     "variable": var_name,
                     "domain": domain,
-                    "mean_abs_shap": float(val)
+                    "mean_abs_shap": float(mean_abs_shap)
                 }
             )
 

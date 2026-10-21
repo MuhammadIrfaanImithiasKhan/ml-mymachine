@@ -9,7 +9,7 @@ Models:
 
 Both models use the EXACT same:
     - Step 4 final scored dataset
-    - 45-feature model matrix
+    - 47-feature model matrix
     - permanent 70/15/15 split
     - train-only severity-feature imputation
     - train-only StandardScaler
@@ -18,6 +18,8 @@ The test set is used only once, for final evaluation.
 
 Ridge alpha is selected using the validation set only.
 """
+import warnings
+
 
 import os
 import json
@@ -25,8 +27,11 @@ import json
 import numpy as np
 import pandas as pd
 
+warnings.filterwarnings("ignore", category=pd.errors.PerformanceWarning)
+
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Ridge
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import (
     mean_squared_error,
     mean_absolute_error,
@@ -236,6 +241,58 @@ def main():
     print(
         "[08_baseline] TEST SET IS LOCKED."
     )
+
+    # -----------------------------------------------------------------------
+    # Train-safe normalization matching Step 5
+    #
+    # Recalculate HGT and OPYEAR normalization from TRAIN rows only.
+    # This prevents full-cohort normalization statistics from leaking
+    # validation/test distribution information into these features.
+    # -----------------------------------------------------------------------
+
+    normalization_stats = {}
+
+    for variable_name in ["HGT", "OPYEAR"]:
+
+        source_col = f"{variable_name}__STD"
+        norm_col = f"{variable_name}__NORM"
+
+        if source_col not in df.columns:
+            raise ValueError(
+                f"Expected standardized source column not found: {source_col}"
+            )
+
+        if norm_col not in X.columns:
+            raise ValueError(
+                f"Expected ML feature not found: {norm_col}"
+            )
+
+        train_values = pd.to_numeric(
+            df.loc[train_idx, source_col],
+            errors="coerce"
+        )
+
+        train_mean = train_values.mean()
+        train_std = train_values.std()
+
+        normalization_stats[variable_name] = {
+            "mean": float(train_mean),
+            "std": float(train_std),
+        }
+
+        if pd.isna(train_std) or train_std == 0:
+            X[norm_col] = 0.0
+        else:
+            X[norm_col] = (
+                pd.to_numeric(df[source_col], errors="coerce")
+                - train_mean
+            ) / train_std
+
+        print(
+            f"[08_baseline] {norm_col}: "
+            f"train mean={train_mean:.6f}, "
+            f"train std={train_std:.6f}"
+        )
 
     # -----------------------------------------------------------------------
     # Train-only imputation
@@ -499,6 +556,60 @@ def main():
             ridge_test_metrics
         )
 
+        # Random Forest: select settings using validation RMSE only.
+        rf_configs = [
+            {"n_estimators": 60, "max_depth": 12,
+             "min_samples_leaf": 5},
+            {"n_estimators": 60, "max_depth": 20,
+             "min_samples_leaf": 5}
+        ]
+
+        best_rf = None
+        best_rf_config = None
+        best_rf_val_rmse = float("inf")
+
+        print()
+        print("RANDOM FOREST VALIDATION SEARCH")
+
+        for rf_config in rf_configs:
+            rf = RandomForestRegressor(
+                n_estimators=rf_config["n_estimators"],
+                max_depth=rf_config["max_depth"],
+                min_samples_leaf=rf_config["min_samples_leaf"],
+                max_features="sqrt",
+                random_state=42,
+                n_jobs=-1
+            )
+
+            rf.fit(X_train, y_train)
+            rf_val_predictions = rf.predict(X_val)
+
+            rf_val_rmse = float(np.sqrt(
+                mean_squared_error(y_val, rf_val_predictions)
+            ))
+
+            print(
+                f"config={rf_config} "
+                f"validation RMSE={rf_val_rmse:.4f}"
+            )
+
+            if rf_val_rmse < best_rf_val_rmse:
+                best_rf_val_rmse = rf_val_rmse
+                best_rf = rf
+                best_rf_config = rf_config
+
+        rf_val_metrics = calculate_metrics(
+            y_val, best_rf.predict(X_val)
+        )
+        rf_test_metrics = calculate_metrics(
+            y_test, best_rf.predict(X_test)
+        )
+
+        print()
+        print(f"Selected Random Forest config: {best_rf_config}")
+        print_metrics("Random Forest Validation", rf_val_metrics)
+        print_metrics("Random Forest FINAL TEST", rf_test_metrics)
+
         return {
             "mean_baseline": {
                 "train_mean": train_mean,
@@ -509,6 +620,11 @@ def main():
                 "selected_alpha": best_alpha,
                 "validation": ridge_val_metrics,
                 "test": ridge_test_metrics
+            },
+            "random_forest": {
+                "selected_config": best_rf_config,
+                "validation": rf_val_metrics,
+                "test": rf_test_metrics
             }
         }
 
@@ -550,7 +666,7 @@ def main():
 
     output_path = os.path.join(
         config.MODEL_DIR,
-        "baseline_metrics.json"
+        "model_comparison_metrics.json"
     )
 
     with open(

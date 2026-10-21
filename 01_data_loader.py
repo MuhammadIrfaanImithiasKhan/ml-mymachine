@@ -198,6 +198,21 @@ def main():
                                  f"(LINK_MODE = '{config.LINK_MODE}').")
 
     utils.save_dataframe(analytic_df, "01_raw_extract")
+
+    # Full analytic cohort exports requested for preprocessing review.
+    # Keep Parquet as the main pipeline format; TSV and Excel are inspection/
+    # handoff formats for the full Step 01 output.
+    tsv_path = os.path.join(config.OUTPUT_DIR, "01_raw_extract.tsv")
+    xlsx_path = os.path.join(config.OUTPUT_DIR, "01_raw_extract.xlsx")
+
+    analytic_df.to_csv(tsv_path, sep="\t", index=False)
+
+    with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
+        analytic_df.to_excel(writer, sheet_name="01_raw_extract", index=False)
+
+    utils.log("01_data_loader", f"Wrote full analytic cohort TSV -> {tsv_path}")
+    utils.log("01_data_loader", f"Wrote full analytic cohort Excel -> {xlsx_path}")
+
     return analytic_df
 
 

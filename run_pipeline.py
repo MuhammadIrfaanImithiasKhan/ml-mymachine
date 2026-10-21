@@ -50,7 +50,21 @@ def run_step(step_number, **kwargs):
             print("[run_pipeline] No --caseid given -- skipping the single-patient SHAP explanation.")
     else:
         module.main()
+
     print(f"[run_pipeline] Step {step_number} finished in {time.time() - t0:.1f}s")
+
+    # Task #9: compare candidate train/validation/test splits
+    # immediately after the official Step 4 weight-learning stage.
+    # This comparison does not overwrite Step 4 artifacts.
+    if step_number == 4:
+        print(f"\\n{'=' * 70}\\nSTEP 4.5: 04_split_comparison\\n{'=' * 70}")
+        t_split = time.time()
+        split_module = importlib.import_module("04_split_comparison")
+        split_module.main()
+        print(
+            f"[run_pipeline] Step 4.5 finished in "
+            f"{time.time() - t_split:.1f}s"
+        )
 
 
 def main():

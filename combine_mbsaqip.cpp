@@ -164,6 +164,23 @@ void appendFile(
         aliases
     );
 
+    // MOBILITY_DEVICE exists only in the 2017 PUF.
+    // Map it explicitly into the historical merged column.
+    if (sourceName == "2017") {
+        map<string, size_t>::const_iterator mobilityMaster =
+            masterMap.find("MOBILITY_DEVICE");
+
+        if (mobilityMaster != masterMap.end()) {
+            for (size_t i = 0; i < sourceHeader.size(); ++i) {
+                if (sourceHeader[i] == "MOBILITY_DEVICE") {
+                    mapping[i] =
+                        static_cast<int>(mobilityMaster->second);
+                    break;
+                }
+            }
+        }
+    }
+
     size_t matchedColumns = 0;
 
     for (size_t i = 0; i < mapping.size(); ++i) {
@@ -271,12 +288,19 @@ int main(int argc, char* argv[]) {
     cout << "Master schema columns: "
          << masterHeader.size() << endl;
 
+    // The 2023 PUF is still expected to contain 185 columns.
+    // MOBILITY_DEVICE is appended afterward as a historical column.
     if (masterHeader.size() != 185) {
         cerr << "ERROR: Expected 185 columns in the "
              << "2023 master schema, but found "
              << masterHeader.size() << endl;
         return 1;
     }
+
+    // MOBILITY_DEVICE exists in the 2017 PUF but not in the
+    // 2020/2023 master schema. Preserve it as an additional
+    // historical column in the merged dataset.
+    masterHeader.push_back("MOBILITY_DEVICE");
 
     map<string, size_t> masterMap =
         createColumnMap(masterHeader);
@@ -303,7 +327,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Write the complete 185-column master schema.
+    // Write the complete merged master schema,
+    // including the historical MOBILITY_DEVICE column.
     for (size_t i = 0; i < masterHeader.size(); ++i) {
         if (i > 0) {
             output << '\t';
