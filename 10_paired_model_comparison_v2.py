@@ -116,13 +116,36 @@ def main():
     print("Loaded rows:", len(df))
 
     X_initial, feature_to_variable, _, _ = build_feature_matrix(df)
+
+    # Restore the exact feature structure expected by the saved MLP.
+    with open(os.path.join(MODEL_DIR, "feature_metadata_v2.json")) as f:
+        saved_metadata = json.load(f)
+
+    saved_columns = saved_metadata["feature_columns"]
+
+    missing_columns = [c for c in saved_columns if c not in X_initial.columns]
+    extra_columns = [c for c in X_initial.columns if c not in saved_columns]
+
+    expected_missing = {
+        "Adiposity_MOBILITY_DEVICE__SEVERITY",
+        "Behavioral_MOBILITY_DEVICE__SEVERITY",
+    }
+
+    if set(missing_columns) != expected_missing or extra_columns:
+        raise ValueError(
+            f"Unexpected feature mismatch: missing={missing_columns}, "
+            f"extra={extra_columns}"
+        )
+
+    X_initial = X_initial.reindex(columns=saved_columns, fill_value=0.0)
+
     feature_columns = list(X_initial.columns)
     X = X_initial.copy()
 
     # Restore missing severity values before train-only imputation.
     for col in feature_columns:
         if col.endswith("__SEVERITY"):
-            variable_name = feature_to_variable[col]
+            variable_name = saved_metadata["feature_to_variable"][col]
             source_col = f"{variable_name}__SEVERITY"
             if source_col in df.columns:
                 X[col] = df[source_col]

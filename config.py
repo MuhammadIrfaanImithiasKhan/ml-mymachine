@@ -216,7 +216,7 @@ VARIABLE_RATIONALE = {
                 "contributes_to_severity_score": True, "flag_direction_logic": "increase",
             },
             "MOBILITY_DEVICE": {
-                "rank": 5, "weight": 8, "column": "MOBILITY_DEVICE",  # NOT FOUND in 2023 MAIN PUF -- see note below
+                "rank": 5, "weight": 8, "column": None,  # NOT FOUND in 2023 MAIN PUF -- see note below
                 "unit_column": None, "source_file": "main", "var_type": "binary",
                 "direction": "high_is_bad", "ideal": None, "tolerance": None, "severity_span": None,
                 "category_scores": {"Yes": 100, "No": 0},
@@ -337,7 +337,7 @@ VARIABLE_RATIONALE = {
                 "contributes_to_severity_score": True, "flag_direction_logic": "increase",
             },
             "MOBILITY_DEVICE": {
-                "rank": 3, "weight": 15, "column": "MOBILITY_DEVICE",  # see Adiposity note -- not in this PUF
+                "rank": 3, "weight": 15, "column": None,  # see Adiposity note -- not in this PUF
                 "unit_column": None, "source_file": "main", "var_type": "binary",
                 "direction": "high_is_bad", "ideal": None, "tolerance": None, "severity_span": None,
                 "category_scores": {"Yes": 100, "No": 0},
